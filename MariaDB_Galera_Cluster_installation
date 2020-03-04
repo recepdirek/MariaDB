@@ -1,0 +1,172 @@
+source : https://www.digitalocean.com/community/tutorials/how-to-configure-a-galera-cluster-with-mariadb-on-ubuntu-18-04-servers
+
+
+
+Galera Cluster installation on 3 EC2 instances ( ubuntu 18.04) 
+
+Setting Up Basic Firewall:
+
+sudo ufw app list
+
+Output
+Available applications:
+  OpenSSH
+
+We need to make sure that the firewall allows SSH connections so that we can log back in next time. We can allow these connections by typing:
+
+sudo ufw allow OpenSSH
+
+Afterwards, we can enable the firewall by typing:
+
+sudo ufw enable
+
+Type “y” and press ENTER to proceed. You can see that SSH connections are still allowed by typing:
+
+sudo ufw status
+
+Output
+Status: active
+
+To                         Action      From
+--                         ------      ----
+OpenSSH                    ALLOW       Anywhere
+OpenSSH (v6)               ALLOW       Anywhere (v6)
+
+
+
+run the followings on all there servers:
+============================================
+
+sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+
+sudo add-apt-repository 'deb [arch=amd64] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.4/ubuntu bionic main'
+
+sudo apt update
+
+sudo apt install mariadb-server
+
+
+
+on all nodes: 
+================================
+sudo mysql -uroot
+
+set password = password("password1");
+
+
+install the rsnc packages on all nodes:
+======================================
+
+sudo apt install rsync
+
+
+
+
+
+
+on the first node, change the cluster config file and copy to other servers, but be sure you updated wsrep_node_address,
+wsrep_node_name correctly in each node seperately
+===================================================================
+
+sudo vi /etc/mysql/conf.d/galera.cnf
+
+
+[mysqld]
+binlog_format=ROW
+default-storage-engine=innodb
+innodb_autoinc_lock_mode=2
+bind-address=0.0.0.0
+
+# Galera Provider Configuration
+wsrep_on=ON
+wsrep_provider=/usr/lib/galera/libgalera_smm.so
+
+# Galera Cluster Configuration
+wsrep_cluster_name="test_cluster"
+wsrep_cluster_address="gcomm://172.31.21.111,172.31.21.167,172.31.30.164"
+
+# Galera Synchronization Configuration
+wsrep_sst_method=rsync
+
+# Galera Node Configuration
+wsrep_node_address="172.31.21.111"
+wsrep_node_name="ip-172-31-30-164"
+
+
+
+open firewall on every server 
+================================
+
+sudo ufw status
+
+sudo ufw allow 3306,4567,4568,4444/tcp
+sudo ufw allow 4567/udp
+
+
+
+stop mariadb on all nodes: 
+============================
+
+sudo systemctl stop mysql
+
+sudo systemctl status mysql
+
+
+bring up the first node:
+===============================
+
+sudo galera_new_cluster
+
+
+mysql -u root -p -e "SHOW STATUS LIKE 'wsrep_cluster_size'"
+==================================================
+
+Output
++--------------------+-------+
+| Variable_name      | Value |
++--------------------+-------+
+| wsrep_cluster_size | 1     |
++--------------------+-------+
+
+
+bring up the second node: 
+===============================
+sudo systemctl start mysql
+
+
+
+mysql -u root -p -e "SHOW STATUS LIKE 'wsrep_cluster_size'"
+
+Output
++--------------------+-------+
+| Variable_name      | Value |
++--------------------+-------+
+| wsrep_cluster_size | 2     |
++--------------------+-------+
+
+bring up the third node:
+===============================
+
+sudo systemctl start mysql 
+
+mysql -u root -p -e "SHOW STATUS LIKE 'wsrep_cluster_size'"
+
+
+Output
++--------------------+-------+
+| Variable_name      | Value |
++--------------------+-------+
+| wsrep_cluster_size | 3     |
++--------------------+-------+
+
+
+you can test: 
+
+mysql -u root -p -e 'CREATE DATABASE playground;
+CREATE TABLE playground.equipment ( id INT NOT NULL AUTO_INCREMENT, type VARCHAR(50), quant INT, color VARCHAR(25), PRIMARY KEY(id));
+INSERT INTO playground.equipment (type, quant, color) VALUES ("slide", 2, "blue");'
+
+
+
+
+
