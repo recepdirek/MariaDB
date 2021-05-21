@@ -1,0 +1,141 @@
+yaml file :
+
+
+
+- hosts: master:slave1:slave2
+  tasks:
+  - name: Install MariaDB repository
+    apt_repository: repo='deb [arch=amd64,arm64,i386,ppc64el] http://mirror.host.ag/mariadb/repo/10.3/ubuntu xenial main' state=present
+  - name: Add repository key to the system
+    apt_key: keyserver=keyserver.ubuntu.com id=0xF1656F24C74CD1D8
+  - name: Install MariaDB Server
+    apt: name=mariadb-server state=latest
+  - name: Install python module
+    apt: name=python-mysqldb
+  - name: Create replication account
+    mysql_user: name=repl host="%" password=lper priv="*.*:REPLICATION SLAVE" state=present
+  - name: Create readwrite user
+    mysql_user: name=rwuser host="%" password=adminpwd priv=*.*:SELECT,INSERT,UPDATE,DELETE,CREATE,DROP state=present
+  - name: Modify configuration file to listen on all interfaces
+    lineinfile: dest=/etc/mysql/my.cnf regexp="^bind-address" line="bind-address=0.0.0.0"
+  become: true
+- hosts: master
+  tasks:
+  - name: Modify configuration file to setup server ID
+    lineinfile: dest=/etc/mysql/my.cnf regexp="^#server-id" line="server-id=1"
+  - name: Restart mysql service
+    service: name=mysql state=restarted
+  - name: Reset master binlog
+    command: /usr/bin/mysql -u root -e "RESET MASTER"
+  become: true
+- hosts: slave1
+  tasks:
+  - name: Modify configuration file to setup server ID
+    lineinfile: dest=/etc/mysql/my.cnf regexp="^#server-id" line="server-id=2"
+  - name: Setup replication
+    command: /usr/bin/mysql -uroot -e "CHANGE MASTER TO master_host='ip-172-31-3-123', master_user='repl', master_password='lper', master_use_gtid=current_pos"
+  - name: Restart mysql service
+    service: name=mysql state=restarted
+  become: true
+- hosts: slave2
+  tasks:
+  - name: Modify configuration file to setup server ID
+    lineinfile: dest=/etc/mysql/my.cnf regexp="^#server-id" line="server-id=3"
+  - name: Setup replication
+    command: /usr/bin/mysql -uroot -e "CHANGE MASTER TO master_host='ip-172-31-3-123', master_user='repl', master_password='lper', master_use_gtid=current_pos"
+  - name: Restart mysql service
+    service: name=mysql state=restarted
+  become: true
+
+
+
+
+
+
+
+
+
+
+
+output: 
+
+ubuntu@ip-172-31-33-110:/ansible_files$ ansible-playbook mariadb_rs.yml
+PLAY [master:slave1:slave2] *******************************************************************************************************************************************************
+TASK [Gathering Facts] ************************************************************************************************************************************************************
+[DEPRECATION WARNING]: Distribution Ubuntu 16.04 on host master should use /usr/bin/python3, but is using /usr/bin/python for backward compatibility with prior Ansible releases.
+A future Ansible release will default to using the discovered platform python for this host. See
+https://docs.ansible.com/ansible/2.9/reference_appendices/interpreter_discovery.html for more information. This feature will be removed in version 2.12. Deprecation warnings can
+be disabled by setting deprecation_warnings=False in ansible.cfg.
+ok: [master]
+[DEPRECATION WARNING]: Distribution Ubuntu 16.04 on host slave1 should use /usr/bin/python3, but is using /usr/bin/python for backward compatibility with prior Ansible releases.
+A future Ansible release will default to using the discovered platform python for this host. See
+https://docs.ansible.com/ansible/2.9/reference_appendices/interpreter_discovery.html for more information. This feature will be removed in version 2.12. Deprecation warnings can
+be disabled by setting deprecation_warnings=False in ansible.cfg.
+ok: [slave1]
+[DEPRECATION WARNING]: Distribution Ubuntu 16.04 on host slave2 should use /usr/bin/python3, but is using /usr/bin/python for backward compatibility with prior Ansible releases.
+A future Ansible release will default to using the discovered platform python for this host. See
+https://docs.ansible.com/ansible/2.9/reference_appendices/interpreter_discovery.html for more information. This feature will be removed in version 2.12. Deprecation warnings can
+be disabled by setting deprecation_warnings=False in ansible.cfg.
+ok: [slave2]
+TASK [Install MariaDB repository] *************************************************************************************************************************************************
+ok: [slave2]
+ok: [master]
+ok: [slave1]
+TASK [Add repository key to the system] *******************************************************************************************************************************************
+ok: [slave1]
+ok: [slave2]
+ok: [master]
+TASK [Install MariaDB Server] *****************************************************************************************************************************************************
+ok: [slave2]
+ok: [master]
+ok: [slave1]
+TASK [Install python module] ******************************************************************************************************************************************************
+ok: [master]
+ok: [slave1]
+ok: [slave2]
+TASK [Create replication account] *************************************************************************************************************************************************
+changed: [slave1]
+changed: [master]
+changed: [slave2]
+TASK [Create readwrite user] ******************************************************************************************************************************************************
+changed: [master]
+changed: [slave1]
+changed: [slave2]
+TASK [Modify configuration file to listen on all interfaces] **********************************************************************************************************************
+changed: [slave2]
+changed: [slave1]
+changed: [master]
+PLAY [master] *********************************************************************************************************************************************************************
+TASK [Gathering Facts] ************************************************************************************************************************************************************
+ok: [master]
+TASK [Modify configuration file to setup server ID] *******************************************************************************************************************************
+changed: [master]
+TASK [Restart mysql service] ******************************************************************************************************************************************************
+changed: [master]
+TASK [Reset master binlog] ********************************************************************************************************************************************************
+changed: [master]
+PLAY [slave1] *********************************************************************************************************************************************************************
+TASK [Gathering Facts] ************************************************************************************************************************************************************
+ok: [slave1]
+TASK [Modify configuration file to setup server ID] *******************************************************************************************************************************
+changed: [slave1]
+TASK [Setup replication] **********************************************************************************************************************************************************
+changed: [slave1]
+TASK [Restart mysql service] ******************************************************************************************************************************************************
+changed: [slave1]
+PLAY [slave2] *********************************************************************************************************************************************************************
+TASK [Gathering Facts] ************************************************************************************************************************************************************
+ok: [slave2]
+TASK [Modify configuration file to setup server ID] *******************************************************************************************************************************
+changed: [slave2]
+TASK [Setup replication] **********************************************************************************************************************************************************
+changed: [slave2]
+TASK [Restart mysql service] ******************************************************************************************************************************************************
+changed: [slave2]
+PLAY RECAP ************************************************************************************************************************************************************************
+master                     : ok=12   changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+slave1                     : ok=12   changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+slave2                     : ok=12   changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+
+
